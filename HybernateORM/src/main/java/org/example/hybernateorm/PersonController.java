@@ -1,9 +1,12 @@
 package org.example.hybernateorm;
 
+import org.json.JSONObject;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
+
+import java.io.IOException;
 
 @RestController
 public class PersonController {
@@ -14,10 +17,43 @@ public class PersonController {
         this.personRepository = personRepository;
     }
 
-    @GetMapping("/persons/by-city")
-    //        При запуске приложения создается пустая табличка -> получите отбивку - в городе никто не живет
-    //        Для инсертов использовал скрипт из папки /scripts
-    public String fetchProduct(@RequestParam String city) {
-        return personRepository.getPersonsByCity(city);
+    @PostMapping("/login")
+    public JSONObject authentification(@RequestParam String login, @RequestParam String password) {
+        return personRepository.getAuth(login, password);
+    }
+
+    @PostMapping("/logout")
+    public String logout(@RequestHeader String auth_token) {
+        if(auth_token == null) {
+            return "Токен не передан!";
+        }
+        return personRepository.deleteAuthToken(auth_token);
+    }
+
+    @PostMapping("/file")
+    public ResponseEntity<String> uploadFile(@RequestParam("file") MultipartFile file, @RequestHeader String auth_token) {
+        if(auth_token == null) {
+            return ResponseEntity.status(403).body("Auth-token is null!");
+        }
+        try {
+            String path = personRepository.saveFile(file, auth_token);
+            return ResponseEntity.ok("File uploaded: " + path);
+        } catch (IOException e) {
+            return ResponseEntity.status(500).body("File upload failed");
+        }
+    }
+
+    @GetMapping("/file")
+    public String getFiles(@RequestParam MultipartFile file) {return file.getOriginalFilename();}
+
+    @DeleteMapping("/file")
+    public String deleteFile(@RequestParam MultipartFile file) {return file.getOriginalFilename();}
+
+    @PutMapping("/file")
+    public String updateFile(@RequestParam MultipartFile file) {return file.getOriginalFilename();}
+
+    @GetMapping("/list")
+    public String getList(@RequestParam int page, @RequestParam int rows) {
+        return "";
     }
 }

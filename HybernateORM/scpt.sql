@@ -1,1 +1,1 @@
-SELECT*FROM public.city
+SELECT*FROM public.persons

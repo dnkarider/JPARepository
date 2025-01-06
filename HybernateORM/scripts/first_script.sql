@@ -13,3 +13,7 @@ INSERT INTO persons (name, surname, age, phone_number, city_of_living) VALUES
                                                       ('Mike',  'Tyson', 58, +993231332, 'FLORIDA'),
                                                       ('IVAN',  'DULIN', 40, +712313233777, 'TAGANROG'),
                                                       ('ALEXANDR',  'PISTOLETOV', 51, +78007076733, 'MOSCOW');
+INSERT INTO accounts (id, login, password) VALUES
+                                                       (0, 'test', 'test'),
+                                                       (1, 'test2', 'test2');
+SELECT * FROM accounts where login = 'test' and password = 'test'
