@@ -1,4 +1,4 @@
-package org.example.hybernateorm;
+package org.example.diplomaServer.model;
 
 import jakarta.persistence.*;
 import lombok.*;

@@ -1,5 +1,7 @@
-package org.example.hybernateorm;
+package org.example.diplomaServer.controller;
 
+import org.example.diplomaServer.model.FileInfo;
+import org.example.diplomaServer.repository.PersonRepository;
 import org.json.JSONObject;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
@@ -7,6 +9,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.util.List;
 
 @RestController
 public class PersonController {
@@ -18,7 +21,7 @@ public class PersonController {
     }
 
     @PostMapping("/login")
-    public JSONObject authentification(@RequestParam String login, @RequestParam String password) {
+    public ResponseEntity<JSONObject> authentification(@RequestParam String login, @RequestParam String password) {
         return personRepository.getAuth(login, password);
     }
 
@@ -44,16 +47,22 @@ public class PersonController {
     }
 
     @GetMapping("/file")
-    public String getFiles(@RequestParam MultipartFile file) {return file.getOriginalFilename();}
+    public ResponseEntity<byte[]> getFile(@RequestParam String fileName, @RequestHeader String auth_token) throws IOException {
+        return personRepository.getFile(fileName, auth_token);
+    }
 
     @DeleteMapping("/file")
-    public String deleteFile(@RequestParam MultipartFile file) {return file.getOriginalFilename();}
+    public ResponseEntity<String> deleteFile(@RequestParam String fileName, @RequestHeader String auth_token) throws IOException {
+        return personRepository.deleteFile(fileName, auth_token);
+    }
 
     @PutMapping("/file")
-    public String updateFile(@RequestParam MultipartFile file) {return file.getOriginalFilename();}
+    public ResponseEntity<String> updateFile(@RequestParam String fileName, @RequestParam String newFileName, @RequestHeader String auth_token) throws IOException {
+        return personRepository.updateFile(fileName, newFileName, auth_token);
+    }
 
     @GetMapping("/list")
-    public String getList(@RequestParam int page, @RequestParam int rows) {
-        return "";
+    public ResponseEntity<List<FileInfo>> getList(@RequestHeader String auth_token) throws IOException {
+        return personRepository.getList(auth_token);
     }
 }

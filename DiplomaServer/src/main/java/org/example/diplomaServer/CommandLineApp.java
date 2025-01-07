@@ -1,4 +1,4 @@
-package org.example.hybernateorm;
+package org.example.diplomaServer;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
