@@ -1,4 +1,4 @@
-package org.example.diplomaServer.Configue;
+package org.example.diplomaServer.configue;
 
 
 import org.springframework.context.annotation.Configuration;

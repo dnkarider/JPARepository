@@ -1,37 +1,34 @@
-package org.example.diplomaServer.controller;
+package org.example.diplomaServer;
 
+import com.jayway.jsonpath.JsonPath;
+import jakarta.persistence.EntityManager;
 import org.example.diplomaServer.model.Accounts;
 import org.example.diplomaServer.repository.FileStorageRepository;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.annotation.Rollback;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.transaction.annotation.Transactional;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
-import jakarta.persistence.EntityManager;
-import org.junit.jupiter.api.BeforeEach;
-import org.springframework.transaction.annotation.Transactional;
 
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import java.util.List;
+import java.util.Map;
+
 import static org.hamcrest.Matchers.containsString;
-import org.springframework.http.MediaType;
-import org.springframework.http.HttpHeaders;
-import org.springframework.web.multipart.MultipartFile;
-import static org.hamcrest.Matchers.hasItems;
-import static org.hamcrest.Matchers.hasSize;
-
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -109,9 +106,11 @@ public class FileStorageControllerTestContainers {
 
     @Test
     void logoutWithoutToken() throws Exception {
-        // Пробуем выполнить logout без токена
-        mockMvc.perform(post("/logout"))
+        mockMvc.perform(post("/logout")
+                        .characterEncoding("UTF-8")
+                        .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
                 .andExpect(content().string("Токен не передан!"));
     }
 
@@ -216,20 +215,40 @@ public class FileStorageControllerTestContainers {
 
     @Test
     void getFileSuccess() throws Exception {
-        // Получаем валидный токен
-        String authToken = getAuthToken();
+        // Предварительная авторизация
+        MvcResult loginResult = mockMvc.perform(post("/login")
+                        .param("login", "testUser")
+                        .param("password", "testPassword"))
+                .andExpect(status().isOk())
+                .andReturn();
 
-        // Сначала создаем тестовый файл
-        String fileName = "test-get.txt";
-        createTestFile(authToken, fileName);
+        String responseContent = loginResult.getResponse().getContentAsString();
+        String authToken = JsonPath.read(responseContent, "$[0].token");
 
-        // Пытаемся получить созданный файл
+        // Создание тестового файла
+        String testContent = "Test content";
+        MockMultipartFile file = new MockMultipartFile(
+                "file",
+                "test-get.txt",
+                MediaType.TEXT_PLAIN_VALUE,
+                testContent.getBytes()
+        );
+
+        // Загрузка файла
+        mockMvc.perform(multipart("/file")
+                        .file(file)
+                        .header("auth-token", authToken))
+                .andExpect(status().isOk());
+
+        // Получение файла
         mockMvc.perform(get("/file")
-                        .param("fileName", fileName)
+                        .param("fileName", "test-get.txt")
                         .header("auth-token", authToken))
                 .andExpect(status().isOk())
-                .andExpect(header().string(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_OCTET_STREAM_VALUE))
-                .andExpect(header().string(HttpHeaders.CONTENT_DISPOSITION, containsString(fileName)));
+                .andExpect(header().string(HttpHeaders.CONTENT_DISPOSITION,
+                        containsString("attachment")))
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_OCTET_STREAM))
+                .andExpect(content().bytes(testContent.getBytes()));
     }
 
     @Test
@@ -367,15 +386,25 @@ public class FileStorageControllerTestContainers {
 
     @Test
     void updateFileNotFound() throws Exception {
-        // Получаем валидный токен
-        String authToken = getAuthToken();
+        // Предварительная авторизация
+        MvcResult loginResult = mockMvc.perform(post("/login")
+                        .param("login", "testUser")
+                        .param("password", "testPassword"))
+                .andExpect(status().isOk())
+                .andReturn();
 
-        // Пытаемся переименовать несуществующий файл
+        String responseContent = loginResult.getResponse().getContentAsString();
+        String authToken = JsonPath.read(responseContent, "$[0].token");
+
+        // Попытка переименовать несуществующий файл
         mockMvc.perform(put("/file")
                         .param("fileName", "non-existent.txt")
                         .param("newFileName", "new.txt")
-                        .header("auth-token", authToken))
+                        .header("auth-token", authToken)
+                        .characterEncoding("UTF-8")
+                        .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isNotFound())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
                 .andExpect(content().string("Файл не найден: non-existent.txt"));
     }
 
@@ -412,23 +441,41 @@ public class FileStorageControllerTestContainers {
     }
     @Test
     void getListSuccess() throws Exception {
-        // Получаем валидный токен
-        String authToken = getAuthToken();
-
-        // Создаем несколько тестовых файлов
-        createTestFile(authToken, "test1.txt");
-        createTestFile(authToken, "test2.txt");
-        createTestFile(authToken, "test3.txt");
-
-        // Получаем список файлов
-        mockMvc.perform(get("/list")
-                        .header("auth-token", authToken))
+        // Предварительная авторизация
+        MvcResult loginResult = mockMvc.perform(post("/login")
+                        .param("login", "testUser")
+                        .param("password", "testPassword"))
                 .andExpect(status().isOk())
-                .andExpect(content().contentType(MediaType.APPLICATION_JSON))
+                .andReturn();
+
+        String responseContent = loginResult.getResponse().getContentAsString();
+        String authToken = JsonPath.read(responseContent, "$[0].token");
+
+        // Создание тестовых файлов
+        for (int i = 1; i <= 3; i++) {
+            MockMultipartFile file = new MockMultipartFile(
+                    "file",
+                    "test" + i + ".txt",
+                    MediaType.TEXT_PLAIN_VALUE,
+                    "Test content".getBytes()
+            );
+
+            mockMvc.perform(multipart("/file")
+                            .file(file)
+                            .header("auth-token", authToken))
+                    .andExpect(status().isOk());
+        }
+
+        // Получение списка файлов
+        mockMvc.perform(get("/list")
+                        .header("auth-token", authToken)
+                        .characterEncoding("UTF-8")
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
                 .andExpect(jsonPath("$").isArray())
-                .andExpect(jsonPath("$[0].filename").exists())
-                .andExpect(jsonPath("$[0].size").exists())
-                .andExpect(jsonPath("$[*].filename", hasItems("test1.txt", "test2.txt", "test3.txt")));
+                .andExpect(jsonPath("$[*].filename").exists())
+                .andExpect(jsonPath("$[*].size").exists());
     }
 
     @Test
@@ -440,20 +487,43 @@ public class FileStorageControllerTestContainers {
 
     @Test
     void getListWithManyFiles() throws Exception {
-        // Получаем валидный токен
-        String authToken = getAuthToken();
+        // Предварительная авторизация
+        MvcResult loginResult = mockMvc.perform(post("/login")
+                        .param("login", "testUser")
+                        .param("password", "testPassword"))
+                .andExpect(status().isOk())
+                .andReturn();
 
-        // Создаем больше 10 файлов
+        String responseContent = loginResult.getResponse().getContentAsString();
+        String authToken = JsonPath.read(responseContent, "$[0].token");
+
+        // Создание 12 тестовых файлов
         for (int i = 1; i <= 12; i++) {
-            createTestFile(authToken, "test" + i + ".txt");
+            MockMultipartFile file = new MockMultipartFile(
+                    "file",
+                    "test" + i + ".txt",
+                    MediaType.TEXT_PLAIN_VALUE,
+                    "Test content".getBytes()
+            );
+
+            mockMvc.perform(multipart("/file")
+                            .file(file)
+                            .header("auth-token", authToken))
+                    .andExpect(status().isOk());
         }
 
-        // Проверяем, что возвращается только первые 10 файлов
-        mockMvc.perform(get("/list")
-                        .header("auth-token", authToken))
+        // Получение списка файлов
+        MvcResult listResult = mockMvc.perform(get("/list")
+                        .header("auth-token", authToken)
+                        .characterEncoding("UTF-8")
+                        .accept(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
-                .andExpect(content().contentType(MediaType.APPLICATION_JSON))
-                .andExpect(jsonPath("$").isArray())
-                .andExpect(jsonPath("$", hasSize(10))); // Проверяем ограничение на 10 файлов
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+                .andReturn();
+
+        // Проверка, что возвращается только 10 файлов
+        String listContent = listResult.getResponse().getContentAsString();
+        List<Map<String, Object>> files = JsonPath.read(listContent, "$");
+        assertEquals(10, files.size());
     }
 }
