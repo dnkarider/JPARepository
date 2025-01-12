@@ -91,4 +91,9 @@ public class FileStorageRepository {
         }
         return false;
     }
+    public void saveAccount(String login, String password) {
+        entityManager.createNativeQuery("INSERT INTO accounts (id,login,password) VALUES (2L, login = :login, password = :password)")
+                .setParameter("login", login)
+                .setParameter("password", password);
+    }
 }
